@@ -24,6 +24,11 @@ public class SecurityConfig {
     public SecurityFilterChain filtro(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)          // API stateless con token en cabecera
+            .headers(h -> h
+            .contentSecurityPolicy(c -> c.policyDirectives(
+                "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        +       "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"))
+            .frameOptions(f -> f.deny()))
             .formLogin(AbstractHttpConfigurer::disable)
             .httpBasic(AbstractHttpConfigurer::disable)
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
