@@ -1,8 +1,11 @@
 package com.fexsolutions.barriomarket.controller;
 
+import com.fexsolutions.barriomarket.dto.AjusteStockRequest;
 import com.fexsolutions.barriomarket.dto.ProductoRequest;
 import com.fexsolutions.barriomarket.dto.ProductoResponse;
 import com.fexsolutions.barriomarket.service.ProductoService;
+import com.fexsolutions.barriomarket.service.StockService;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,6 +20,7 @@ import java.util.List;
 public class ProductoController {
 
     private final ProductoService service;
+    private final StockService stockService;
 
     @GetMapping
     public List<ProductoResponse> listar(@AuthenticationPrincipal Integer idUsuario) {
@@ -41,5 +45,12 @@ public class ProductoController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void eliminar(@AuthenticationPrincipal Integer idUsuario, @PathVariable Integer id) {
         service.eliminar(idUsuario, id);
+    }
+
+    @PatchMapping("/{id}/stock")
+    public ProductoResponse ajustarStock(@AuthenticationPrincipal Integer idUsuario,
+                                        @PathVariable Integer id,
+                                        @Valid @RequestBody AjusteStockRequest req) {
+        return stockService.ajustar(idUsuario, id, req);
     }
 }
