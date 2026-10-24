@@ -65,7 +65,11 @@ class VentaServiceTest {
     }
 
     private ItemVentaRequest item(int idProducto, String cantidad) {
-        return new ItemVentaRequest(idProducto, new BigDecimal(cantidad));
+        return new ItemVentaRequest(idProducto, new BigDecimal(cantidad), null);
+    }
+
+    private ItemVentaRequest itemConPrecio(int idProducto, String cantidad, String precio) {
+        return new ItemVentaRequest(idProducto, new BigDecimal(cantidad), new BigDecimal(precio));
     }
 
     @Test
@@ -172,4 +176,35 @@ class VentaServiceTest {
         orden.verify(productos).buscarParaActualizar(10, USUARIO);
         orden.verify(productos).buscarParaActualizar(20, USUARIO);
     }
+
+    @Test
+    void siElBodeguerroIndicaPrecioSeUsaEsePrecio() {
+        Producto arroz = producto(10, "Arroz", "4.50", "5", "kg");
+        encontrado(arroz);
+        ventaSeGuarda();
+
+        VentaResponse r = service.registrar(USUARIO, new VentaRequest(List.of(itemConPrecio(10, "2", "5.00"))));
+
+        assertThat(r.total()).isEqualByComparingTo("10.00");
+        assertThat(r.detalles().get(0).precioUnitario()).isEqualByComparingTo("5.00");
+    }
+
+    @Test
+    void elPrecioIndicadoNoCambiaElPrecioDeLista() {
+        Producto arroz = producto(10, "Arroz", "4.50", "5", "kg");
+        encontrado(arroz);
+        ventaSeGuarda();
+
+        service.registrar(USUARIO, new VentaRequest(List.of(itemConPrecio(10, "1", "5.00"))));
+
+        assertThat(arroz.getPrecio()).isEqualByComparingTo("4.50");
+    }
+
+    @Test
+    void mismoProductoConPreciosDistintosEsInvalido() {
+        assertThatThrownBy(() -> service.registrar(USUARIO, new VentaRequest(
+                List.of(itemConPrecio(10, "1", "5.00"), itemConPrecio(10, "1", "6.00")))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
 }
