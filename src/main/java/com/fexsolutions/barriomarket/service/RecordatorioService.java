@@ -5,7 +5,7 @@ import com.fexsolutions.barriomarket.entity.Recordatorio;
 import com.fexsolutions.barriomarket.repository.RecordatorioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
+import com.fexsolutions.barriomarket.dto.RecordatorioResponse;
 import java.util.List;
 
 @Service
@@ -39,4 +39,8 @@ public class RecordatorioService {
                 : "Queda poco stock de " + producto.getNombre());
         recordatorios.save(nuevo);
     }
+
+    public List<RecordatorioResponse> pendientes(Integer idUsuario) { throw new UnsupportedOperationException(); }
+    public void marcarLeido(Integer idUsuario, Integer id) { throw new UnsupportedOperationException(); }
+    
 }

@@ -23,4 +23,6 @@ public interface ProductoRepository extends JpaRepository<Producto, Integer> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Producto p where p.id = :id and p.idUsuario = :idUsuario and p.deletedAt is null")
     Optional<Producto> buscarParaActualizar(@Param("id") Integer id, @Param("idUsuario") Integer idUsuario);
+
+    boolean existsByIdCategoria(Integer idCategoria);
 }
