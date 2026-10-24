@@ -6,4 +6,5 @@ import java.util.List;
 
 public interface CategoriaRepository extends JpaRepository<Categoria, Integer> {
     List<Categoria> findByIdUsuarioOrderByNombre(Integer idUsuario);
+    boolean existsByIdAndIdUsuario(Integer id, Integer idUsuario);
 }
