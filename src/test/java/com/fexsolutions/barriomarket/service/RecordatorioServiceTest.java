@@ -17,6 +17,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+
+import com.fexsolutions.barriomarket.exception.NoEncontradoException;
+import java.util.Optional;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 @ExtendWith(MockitoExtension.class)
 class RecordatorioServiceTest {
 
@@ -81,5 +87,33 @@ class RecordatorioServiceTest {
         service.sincronizar(producto("amarillo"));
 
         verify(repo, never()).save(any());
+    }
+    @Test
+    void pendientesDevuelveLasAlertasDelUsuario() {
+        Recordatorio r = pendiente("poco_stock");
+        r.setId(1);
+        r.setMensaje("Queda poco stock de Arroz");
+        when(repo.pendientesDeUsuario(5)).thenReturn(List.of(r));
+
+        assertThat(service.pendientes(5)).hasSize(1);
+    }
+
+    @Test
+    void marcarLeidoMarcaLaAlertaPropia() {
+        Recordatorio r = pendiente("poco_stock");
+        when(repo.buscarDeUsuario(1, 5)).thenReturn(Optional.of(r));
+
+        service.marcarLeido(5, 1);
+
+        assertThat(r.getLeido()).isTrue();
+        verify(repo).save(r);
+    }
+
+    @Test
+    void marcarLeidoDeUnaAlertaAjenaDaNoEncontrado() {
+        when(repo.buscarDeUsuario(1, 5)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.marcarLeido(5, 1))
+                .isInstanceOf(NoEncontradoException.class);
     }
 }

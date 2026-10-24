@@ -2,11 +2,14 @@ package com.fexsolutions.barriomarket.service;
 
 import com.fexsolutions.barriomarket.entity.Producto;
 import com.fexsolutions.barriomarket.entity.Recordatorio;
+import com.fexsolutions.barriomarket.exception.NoEncontradoException;
 import com.fexsolutions.barriomarket.repository.RecordatorioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import com.fexsolutions.barriomarket.dto.RecordatorioResponse;
 import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
+import com.fexsolutions.barriomarket.exception.NoEncontradoException;
 
 @Service
 @RequiredArgsConstructor
@@ -40,7 +43,17 @@ public class RecordatorioService {
         recordatorios.save(nuevo);
     }
 
-    public List<RecordatorioResponse> pendientes(Integer idUsuario) { throw new UnsupportedOperationException(); }
-    public void marcarLeido(Integer idUsuario, Integer id) { throw new UnsupportedOperationException(); }
-    
+    @Transactional(readOnly = true)
+    public List<RecordatorioResponse> pendientes(Integer idUsuario) {
+        return recordatorios.pendientesDeUsuario(idUsuario).stream()
+                .map(RecordatorioResponse::de).toList();
+    }
+
+    @Transactional
+    public void marcarLeido(Integer idUsuario, Integer id) {
+        Recordatorio r = recordatorios.buscarDeUsuario(id, idUsuario)
+                .orElseThrow(() -> new NoEncontradoException("Recordatorio no encontrado"));
+        r.setLeido(true);
+        recordatorios.save(r);
+    }   
 }
