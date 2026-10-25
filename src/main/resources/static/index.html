@@ -56,6 +56,7 @@
       <button type="button" class="nav" id="nav-alertas" data-vista="alertas">Alertas</button>
       <button type="button" class="nav" data-vista="categorias">Categorías</button>
       <button type="button" class="nav" data-vista="reportes">Reportes</button>
+      <button type="button" id="btn-perfil" class="btn">Mi cuenta</button>
     </nav>
     <span id="usuario-nombre" class="usuario"></span>
     <button type="button" id="btn-salir" class="btn">Salir</button>
@@ -183,6 +184,46 @@
     </div>
   </form>
 </dialog>
+
+<dialog id="dlg-perfil">
+  <h2>Mi cuenta</h2>
+
+  <form id="form-perfil" class="form">
+    <label>Nombre
+      <input name="nombre" maxlength="100" required autocomplete="name">
+    </label>
+    <label>Correo (opcional)
+      <input name="email" type="email" maxlength="100" autocomplete="email">
+    </label>
+    <label>Teléfono (es tu usuario para ingresar)
+      <input name="telefono" disabled>
+    </label>
+    <p class="error" role="alert"></p>
+    <button type="submit" class="btn primario">Guardar datos</button>
+  </form>
+
+  <hr>
+
+  <form id="form-password" class="form">
+    <h3>Cambiar contraseña</h3>
+    <label>Contraseña actual
+      <input name="passwordActual" type="password" required autocomplete="current-password">
+    </label>
+    <label>Nueva contraseña (mínimo 8 caracteres)
+      <input name="passwordNueva" type="password" minlength="8" maxlength="72" required autocomplete="new-password">
+    </label>
+    <label>Repite la nueva contraseña
+      <input name="passwordNueva2" type="password" minlength="8" maxlength="72" required autocomplete="new-password">
+    </label>
+    <p class="error" role="alert"></p>
+    <button type="submit" class="btn primario">Cambiar contraseña</button>
+  </form>
+
+  <div class="acciones-form">
+    <button type="button" id="btn-cerrar-perfil" class="btn">Cerrar</button>
+  </div>
+</dialog>
+
 
 <script src="/js/api.js"></script>
 <script src="/js/app.js"></script>

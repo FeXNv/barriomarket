@@ -505,5 +505,73 @@ $('btn-excel').addEventListener('click', async () => {
   }
 });
 
+
+// ---------- Mi cuenta (perfil) ----------
+const dlgPerfil = $('dlg-perfil');
+const formPerfil = $('form-perfil');
+const formPassword = $('form-password');
+
+function msgForm(form, texto, ok = false) {
+  const e = form.querySelector('.error');
+  e.textContent = texto;
+  e.classList.toggle('ok', ok);
+}
+
+$('btn-perfil').addEventListener('click', async () => {
+  msgForm(formPerfil, '');
+  msgForm(formPassword, '');
+  formPassword.reset();
+  dlgPerfil.showModal();
+  try {
+    const p = await Api.get('/api/perfil');
+    formPerfil.elements.nombre.value = p.nombre;
+    formPerfil.elements.email.value = p.email ?? '';
+    formPerfil.elements.telefono.value = p.telefono;
+  } catch (e) {
+    msgForm(formPerfil, e.message);
+  }
+});
+
+formPerfil.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  msgForm(formPerfil, '');
+  const f = formPerfil.elements;
+  try {
+    const p = await Api.put('/api/perfil', {
+      nombre: f.nombre.value.trim(),
+      email: f.email.value.trim() || null,
+    });
+    const s = Api.sesion();
+    if (s) { s.nombre = p.nombre; Api.guardar(s); }
+    $('usuario-nombre').textContent = p.nombre;
+    msgForm(formPerfil, 'Datos guardados', true);
+  } catch (e) {
+    msgForm(formPerfil, e.message);
+  }
+});
+
+formPassword.addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  msgForm(formPassword, '');
+  const f = formPassword.elements;
+  if (f.passwordNueva.value !== f.passwordNueva2.value) {
+    msgForm(formPassword, 'Las contraseñas nuevas no coinciden');
+    return;
+  }
+  try {
+    await Api.put('/api/perfil/password', {
+      passwordActual: f.passwordActual.value,
+      passwordNueva: f.passwordNueva.value,
+    });
+    formPassword.reset();
+    msgForm(formPassword, 'Contraseña actualizada', true);
+  } catch (e) {
+    msgForm(formPassword, e.message);
+  }
+});
+
+$('btn-cerrar-perfil').addEventListener('click', () => dlgPerfil.close());
+
+
 // ---------- arranque ----------
 if (Api.sesion()) mostrarApp(); else mostrarAuth();
