@@ -35,7 +35,8 @@ public class SecurityConfig {
             .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
             .authorizeHttpRequests(a -> a
                 .requestMatchers("/api/auth/register", "/api/auth/login", "/actuator/health").permitAll()
-                .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/img/**", "/favicon.ico").permitAll()
+                .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/img/**", "/icons/**",
+                "/sw.js", "/manifest.webmanifest", "/favicon.ico").permitAll()
                 .anyRequest().authenticated())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

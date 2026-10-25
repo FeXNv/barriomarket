@@ -18,9 +18,92 @@ const cantidad = (n) => Number(n).toLocaleString('es-PE', { maximumFractionDigit
 const ETIQUETA_ESTADO = { verde: 'Disponible', amarillo: 'Poco stock', rojo: 'Agotado' };
 const PASO_STOCK = { unidad: 1, kg: 0.5, litro: 0.5 };   // lo que suman/restan los botones − y +
 
+// Icono según el nombre del producto (o la unidad si no hay coincidencia)
+const ICONOS = [
+  [/arroz|fideo|tallar|pasta|harina|avena|lenteja|frijol|menestra/i, '🍚'],
+  [/leche|yogur|queso|mantequilla/i, '🥛'],
+  [/pan|galleta|keke|torta/i, '🍞'],
+  [/huevo/i, '🥚'],
+  [/pollo|carne|pescado|jamón|jamon|salchicha|atún|atun/i, '🍗'],
+  [/gaseosa|agua|jugo|cerveza|bebida|refresco|inca|coca/i, '🥤'],
+  [/papa|cebolla|tomate|zanahoria|verdura|limón|limon|ajo/i, '🥔'],
+  [/manzana|plátano|platano|naranja|fruta|uva|palta/i, '🍎'],
+  [/azúcar|azucar|sal|aceite|vinagre|salsa|mayonesa|ketchup/i, '🧂'],
+  [/jab[oó]n|detergente|lej[ií]a|papel|shampoo|limpi|desinfect/i, '🧼'],
+  [/chocolate|caramelo|dulce|snack|chizito|papas fritas/i, '🍫'],
+  [/caf[eé]|t[eé]\b|infusi/i, '☕'],
+];
+const ICONO_UNIDAD = { unidad: '📦', kg: '⚖️', litro: '🧴' };
+function icono(p) {
+  for (const [re, i] of ICONOS) if (re.test(p.nombre)) return i;
+  return ICONO_UNIDAD[p.unidadMedida] || '📦';
+}
+
+// ---------- avisos y confirmación ----------
+function toast(texto, tipo = 'ok') {
+  const t = el('div', { class: 'toast ' + tipo, role: 'status', text: texto });
+  $('toasts').append(t);
+  setTimeout(() => t.remove(), 3200);
+}
+
+const dlgConfirmar = $('dlg-confirmar');
+let resolverConfirmar = null;
+function confirmar(titulo, texto, botonSi = 'Eliminar', peligroso = true) {
+  $('confirmar-si').className = 'btn ' + (peligroso ? 'peligro-lleno' : 'primario');
+  $('confirmar-titulo').textContent = titulo;
+  $('confirmar-texto').textContent = texto;
+  $('confirmar-si').textContent = botonSi;
+  dlgConfirmar.showModal();
+  return new Promise((resolver) => { resolverConfirmar = resolver; });
+}
+function cerrarConfirmar(valor) {
+  if (dlgConfirmar.open) dlgConfirmar.close();
+  if (resolverConfirmar) { resolverConfirmar(valor); resolverConfirmar = null; }
+}
+$('confirmar-si').addEventListener('click', () => cerrarConfirmar(true));
+$('confirmar-no').addEventListener('click', () => cerrarConfirmar(false));
+dlgConfirmar.addEventListener('cancel', () => cerrarConfirmar(false));   // tecla Esc
+
+// ---------- modo oscuro ----------
+function temaActual() { return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; }
+function pintarBotonesTema() {
+  const oscuro = temaActual() === 'dark';
+  document.querySelectorAll('.btn-tema').forEach((b) => {
+    b.textContent = oscuro ? '☀️' : '🌙';
+    b.title = oscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
+  });
+}
+document.querySelectorAll('.btn-tema').forEach((b) => b.addEventListener('click', () => {
+  const nuevo = temaActual() === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', nuevo);
+  try { localStorage.setItem('bm_tema', nuevo); } catch { /* sin almacenamiento */ }
+  pintarBotonesTema();
+}));
+pintarBotonesTema();
+
+// ---------- Campos numéricos: solo dígitos, un punto y límites de longitud ----------
+function limpiarDecimal(valor, maxEnteros, maxDecimales) {
+  const v = valor.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+  const i = v.indexOf('.');
+  const enteros = (i === -1 ? v : v.slice(0, i)).slice(0, maxEnteros);
+  if (i === -1 || maxDecimales === 0) return enteros;
+  const decimales = v.slice(i + 1).replace(/\./g, '').slice(0, maxDecimales);
+  return enteros + '.' + decimales;
+}
+
+// Fase de captura: se limpia antes de que los demás manejadores lean el valor.
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (!(t instanceof HTMLInputElement) || !t.dataset.enteros) return;
+  const limpio = limpiarDecimal(t.value, Number(t.dataset.enteros), Number(t.dataset.decimales || 0));
+  if (limpio !== t.value) t.value = limpio;
+}, true);
+
 let productos = [];
 let categorias = [];
-let editando = null;   // producto en edición, o null si es nuevo
+let editando = null;          // producto en edición, o null si es nuevo
+let filtroEstado = 'todos';   // todos | verde | amarillo | rojo
+let filtroCategoria = 0;      // 0 = todas
 
 // ---------- pantallas ----------
 function mostrarAuth() {
@@ -32,10 +115,11 @@ function mostrarApp() {
   $('usuario-nombre').textContent = s ? s.nombre : '';
   $('pantalla-auth').classList.add('oculto');
   $('pantalla-app').classList.remove('oculto');
-  cambiarVista('inventario');
+  cambiarVista('inicio');
 }
 
 const cargadores = {
+  inicio: cargarInicio,
   inventario: cargarInventario,
   caja: cargarCaja,
   alertas: cargarAlertas,
@@ -46,11 +130,11 @@ const cargadores = {
 function cambiarVista(nombre) {
   document.querySelectorAll('.nav').forEach((b) => b.classList.toggle('activa', b.dataset.vista === nombre));
   document.querySelectorAll('.vista').forEach((v) => v.classList.toggle('oculto', v.id !== 'vista-' + nombre));
+  window.scrollTo(0, 0);
   if (cargadores[nombre]) cargadores[nombre]();
   refrescarContadorAlertas();
+  actualizarBarraVenta();
 }
-
-
 
 // ---------- autenticación ----------
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
@@ -78,16 +162,75 @@ async function enviarAuth(evento, ruta) {
 $('form-login').addEventListener('submit', (e) => enviarAuth(e, '/api/auth/login'));
 $('form-registro').addEventListener('submit', (e) => enviarAuth(e, '/api/auth/register'));
 
-$('btn-salir').addEventListener('click', () => { Api.limpiar(); mostrarAuth(); });
+$('btn-salir').addEventListener('click', () => { Api.limpiar(); carrito = []; mostrarAuth(); });
 Api.alExpirar(mostrarAuth);
 
 document.querySelectorAll('.nav').forEach((b) => b.addEventListener('click', () => cambiarVista(b.dataset.vista)));
+document.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => cambiarVista(b.dataset.ir)));
+
+// ---------- Resumen (inicio) ----------
+async function cargarInicio() {
+  $('msg-inicio').textContent = '';
+  const s = Api.sesion();
+  const hora = new Date().getHours();
+  const saludo = hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches';
+  $('saludo').textContent = saludo + (s && s.nombre ? ', ' + s.nombre : '') + '. Así va tu bodega hoy.';
+  try {
+    const hoy = hoyISO();
+    const [lista, ventas] = await Promise.all([
+      Api.get('/api/productos'),
+      Api.get('/api/reportes/ventas?desde=' + hoy + '&hasta=' + hoy),
+    ]);
+    productos = lista;
+    renderInicio(ventas);
+  } catch (e) {
+    $('msg-inicio').textContent = e.message;
+  }
+}
+
+function renderInicio(ventas) {
+  const cuenta = { verde: 0, amarillo: 0, rojo: 0 };
+  for (const p of productos) if (cuenta[p.estado] !== undefined) cuenta[p.estado]++;
+  $('st-total').textContent = String(productos.length);
+  $('st-verde').textContent = String(cuenta.verde);
+  $('st-amarillo').textContent = String(cuenta.amarillo);
+  $('st-rojo').textContent = String(cuenta.rojo);
+
+  const total = ventas.reduce((s, f) => s + Number(f.subtotal), 0);
+  const nVentas = new Set(ventas.map((f) => f.idVenta)).size;
+  $('ventas-hoy').textContent = moneda(total);
+  $('ventas-hoy-det').textContent = nVentas
+    ? nVentas + (nVentas === 1 ? ' venta registrada hoy' : ' ventas registradas hoy')
+    : 'Aún no hay ventas hoy';
+
+  const criticos = productos
+    .filter((p) => p.estado === 'rojo' || p.estado === 'amarillo')
+    .sort((a, b) => Number(a.stock) - Number(b.stock))
+    .slice(0, 6);
+  const ul = $('lista-por-agotar');
+  ul.replaceChildren();
+  $('sin-por-agotar').classList.toggle('oculto', criticos.length > 0);
+  for (const p of criticos) {
+    ul.append(el('li', {},
+      el('span', { text: icono(p) + ' ' + p.nombre }),
+      el('span', { class: 'badge ' + p.estado, text: cantidad(p.stock) + ' ' + p.unidadMedida }),
+    ));
+  }
+}
+
+document.querySelectorAll('.stat').forEach((b) => b.addEventListener('click', () => {
+  filtroEstado = b.dataset.filtro;
+  filtroCategoria = 0;
+  $('buscar').value = '';
+  cambiarVista('inventario');
+}));
 
 // ---------- inventario ----------
 async function cargarInventario() {
   $('msg-inventario').textContent = '';
   try {
     [productos, categorias] = await Promise.all([Api.get('/api/productos'), Api.get('/api/categorias')]);
+    renderChips();
     renderInventario();
   } catch (e) {
     $('msg-inventario').textContent = e.message;
@@ -99,30 +242,59 @@ function nombreCategoria(id) {
   return c ? c.nombre : '—';
 }
 
+function renderChips() {
+  document.querySelectorAll('#chips-estado .chip').forEach((c) =>
+    c.classList.toggle('activa', c.dataset.filtro === filtroEstado));
+  const cont = $('chips-categoria');
+  cont.replaceChildren();
+  cont.classList.toggle('oculto', categorias.length === 0);
+  const crear = (id, texto) => el('button', {
+    type: 'button', class: 'chip' + (filtroCategoria === id ? ' activa' : ''), text: texto,
+    onclick: () => { filtroCategoria = id; renderChips(); renderInventario(); },
+  });
+  cont.append(crear(0, 'Todas las categorías'), ...categorias.map((c) => crear(c.id, c.nombre)));
+}
+document.querySelectorAll('#chips-estado .chip').forEach((c) => c.addEventListener('click', () => {
+  filtroEstado = c.dataset.filtro;
+  renderChips();
+  renderInventario();
+}));
+
 function renderInventario() {
   const filtro = $('buscar').value.trim().toLowerCase();
-  const lista = productos.filter((p) => p.nombre.toLowerCase().includes(filtro));
-  const cuerpo = $('tbody-productos');
-  cuerpo.replaceChildren();
+  const lista = productos.filter((p) =>
+    p.nombre.toLowerCase().includes(filtro)
+    && (filtroEstado === 'todos' || p.estado === filtroEstado)
+    && (filtroCategoria === 0 || p.idCategoria === filtroCategoria));
+  const grid = $('grid-inventario');
+  grid.replaceChildren();
 
   $('vacio-inventario').classList.toggle('oculto', productos.length > 0);
+  $('sin-resultados').classList.toggle('oculto', productos.length === 0 || lista.length > 0);
 
   for (const p of lista) {
     const paso = PASO_STOCK[p.unidadMedida] || 1;
-    cuerpo.append(el('tr', {},
-      el('td', { text: p.nombre }),
-      el('td', { text: nombreCategoria(p.idCategoria) }),
-      el('td', { class: 'num', text: moneda(p.precio) }),
-      el('td', { class: 'num', text: cantidad(p.stock) + ' ' + p.unidadMedida }),
-      el('td', {}, el('span', { class: 'badge ' + p.estado, text: ETIQUETA_ESTADO[p.estado] || p.estado })),
-      el('td', {}, el('div', { class: 'acciones' },
+    grid.append(el('article', { class: 'prod' },
+      el('div', { class: 'prod-cab' },
+        el('div', { class: 'prod-ico', 'aria-hidden': 'true', text: icono(p) }),
+        el('div', { class: 'prod-datos' },
+          el('strong', { text: p.nombre }),
+          el('span', { text: nombreCategoria(p.idCategoria) })),
+        el('button', { class: 'badge boton ' + p.estado, type: 'button',
+          title: 'Toca para cambiar el estado', 'aria-label': 'Cambiar estado de ' + p.nombre + ' (ahora ' + (ETIQUETA_ESTADO[p.estado] || p.estado) + ')',
+          text: (ICONO_ESTADO[p.estado] || '') + ' ' + (ETIQUETA_ESTADO[p.estado] || p.estado),
+          onclick: () => ciclarEstado(p) })),
+      el('div', { class: 'prod-medio' },
+        el('span', { class: 'prod-precio', text: moneda(p.precio) + ' / ' + p.unidadMedida })),
+      el('div', { class: 'prod-stock' },
         el('button', { class: 'btn chico', type: 'button', 'aria-label': 'Restar ' + p.nombre, text: '−',
           onclick: () => ajustar(p, 'merma', paso) }),
+        el('strong', { text: cantidad(p.stock) + ' ' + p.unidadMedida }),
         el('button', { class: 'btn chico', type: 'button', 'aria-label': 'Sumar ' + p.nombre, text: '+',
-          onclick: () => ajustar(p, 'reposicion', paso) }),
-        el('button', { class: 'btn chico', type: 'button', text: 'Editar', onclick: () => abrirFormulario(p) }),
-        el('button', { class: 'btn chico peligro', type: 'button', text: 'Eliminar', onclick: () => eliminar(p) }),
-      )),
+          onclick: () => ajustar(p, 'reposicion', paso) })),
+      el('div', { class: 'prod-acciones' },
+        el('button', { class: 'btn chico', type: 'button', text: '✏️ Editar', onclick: () => abrirFormulario(p) }),
+        el('button', { class: 'btn chico peligro', type: 'button', text: '🗑️ Eliminar', onclick: () => eliminar(p) })),
     ));
   }
 }
@@ -134,20 +306,60 @@ async function ajustar(p, tipo, cant) {
     const actualizado = await Api.patch('/api/productos/' + p.id + '/stock', { tipo, cantidad: cant });
     productos = productos.map((x) => (x.id === p.id ? actualizado : x));
     renderInventario();
+    refrescarContadorAlertas();
   } catch (e) {
-    $('msg-inventario').textContent = e.message;
+    toast(e.message, 'mal');
+  }
+}
+
+// ---------- Interruptor táctil de 3 estados (verde → amarillo → rojo → verde) ----------
+const ICONO_ESTADO = { verde: '🟢', amarillo: '🟡', rojo: '🔴' };
+
+// Stock que corresponde a cada color, según la misma regla del semáforo del servidor
+function stockParaEstado(p, estado) {
+  const min = Number(p.stockMinimo ?? 3);
+  const redondeo = (n) => (p.unidadMedida === 'unidad' ? Math.ceil(n) : n);
+  if (estado === 'rojo') return 0;
+  if (estado === 'amarillo') return redondeo(min);
+  return redondeo(Math.max(min * 2, min + 1));
+}
+
+function siguienteEstado(p) {
+  const min = Number(p.stockMinimo ?? 3);
+  if (p.estado === 'verde') return min > 0 ? 'amarillo' : 'rojo';   // con mínimo 0 no existe amarillo
+  if (p.estado === 'amarillo') return 'rojo';
+  return 'verde';
+}
+
+async function ciclarEstado(p) {
+  const destino = siguienteEstado(p);
+  const nuevo = stockParaEstado(p, destino);
+  const ok = await confirmar(
+    'Cambiar estado a ' + ETIQUETA_ESTADO[destino].toLowerCase(),
+    '"' + p.nombre + '": el stock pasará de ' + cantidad(p.stock) + ' a ' + cantidad(nuevo) + ' ' + p.unidadMedida
+      + '. Se guardará como ajuste en el historial.',
+    'Cambiar', false);
+  if (!ok) return;
+  try {
+    const actualizado = await Api.patch('/api/productos/' + p.id + '/stock', { tipo: 'ajuste', cantidad: nuevo });
+    productos = productos.map((x) => (x.id === p.id ? actualizado : x));
+    renderInventario();
+    refrescarContadorAlertas();
+    toast(p.nombre + ': ' + ETIQUETA_ESTADO[actualizado.estado].toLowerCase());
+  } catch (e) {
+    toast(e.message, 'mal');
   }
 }
 
 async function eliminar(p) {
-  if (!confirm('¿Eliminar "' + p.nombre + '"?')) return;
-  $('msg-inventario').textContent = '';
+  if (!(await confirmar('¿Eliminar producto?', '"' + p.nombre + '" dejará de aparecer en tu inventario.'))) return;
   try {
     await Api.del('/api/productos/' + p.id);
     productos = productos.filter((x) => x.id !== p.id);
     renderInventario();
+    toast('Producto eliminado');
   } catch (e) {
-    $('msg-inventario').textContent = e.message;
+    toast(e.message, 'mal');
   }
 }
 
@@ -182,6 +394,7 @@ formProducto.addEventListener('submit', async (evento) => {
   const f = formProducto.elements;
   const error = formProducto.querySelector('.error');
   error.textContent = '';
+  const nuevaCat = f.nuevaCategoria.value.trim();
 
   const cuerpo = {
     nombre: f.nombre.value.trim(),
@@ -190,14 +403,31 @@ formProducto.addEventListener('submit', async (evento) => {
     stock: Number(f.stock.value),
     unidadMedida: f.unidadMedida.value,
   };
-  if (f.stockMinimo.value !== '') cuerpo.stockMinimo = Number(f.stockMinimo.value);
 
+  if (!nuevaCat && !f.idCategoria.value) {
+    error.textContent = 'Elige una categoría o crea una nueva';
+    return;
+  }
+  if (f.stockMinimo.value !== '') cuerpo.stockMinimo = Number(f.stockMinimo.value);
+  if (!(cuerpo.precio > 0)) {
+    error.textContent = 'El precio debe ser mayor que cero';
+    return;
+  }
+  if (!(cuerpo.stock >= 0)) {
+    error.textContent = 'El stock no es válido';
+    return;
+  }
   if (cuerpo.unidadMedida === 'unidad' && !Number.isInteger(cuerpo.stock)) {
     error.textContent = 'Los productos por unidad solo admiten stock entero';
     return;
   }
 
   try {
+    if (nuevaCat) {
+      const c = await Api.post('/api/categorias', { nombre: nuevaCat });
+      categorias = [...categorias, c].sort((a, b) => a.nombre.localeCompare(b.nombre));
+      cuerpo.idCategoria = c.id;
+    }
     const guardado = editando
       ? await Api.put('/api/productos/' + editando.id, cuerpo)
       : await Api.post('/api/productos', cuerpo);
@@ -206,18 +436,22 @@ formProducto.addEventListener('submit', async (evento) => {
       : [...productos, guardado].sort((a, b) => a.nombre.localeCompare(b.nombre));
     dialogo.close();
     renderInventario();
+    toast(editando ? 'Producto actualizado' : 'Producto creado');
   } catch (e) {
     error.textContent = e.message;
   }
 });
+
 // ---------- Modo Caja ----------
 let carrito = [];   // cada línea: { producto, cantidad, precio }
 const FRACCIONES = [['1', 1], ['½', 0.5], ['¼', 0.25], ['⅛', 0.125]];
 const redondear3 = (n) => Math.round(n * 1000) / 1000;
 const subtotal = (l) => Math.round(l.cantidad * l.precio * 100) / 100;
 
+// Mensaje en línea (errores). Los mensajes de éxito salen como aviso flotante.
 function mensaje(id, texto, ok = false) {
   const e = $(id);
+  if (ok && texto) { e.textContent = ''; e.classList.remove('ok'); toast(texto); return; }
   e.textContent = texto;
   e.classList.toggle('ok', ok);
 }
@@ -253,6 +487,7 @@ function renderGrid() {
           ...bloqueo, onclick: () => agregar(p, val) }));
 
     grid.append(el('div', { class: 'tile' + (agotado ? ' agotada' : '') },
+      el('span', { class: 'tile-ico', 'aria-hidden': 'true', text: icono(p) }),
       el('strong', { text: p.nombre }),
       el('span', { class: 'sub', text: moneda(p.precio) + ' / ' + p.unidadMedida }),
       el('span', { class: 'badge ' + p.estado, text: cantidad(p.stock) + ' ' + p.unidadMedida }),
@@ -267,7 +502,7 @@ function agregar(p, cant) {
   const linea = carrito.find((l) => l.producto.id === p.id);
   const nueva = redondear3((linea ? linea.cantidad : 0) + cant);
   if (nueva > Number(p.stock)) {
-    mensaje('msg-caja', 'No hay suficiente stock de ' + p.nombre);
+    toast('No hay suficiente stock de ' + p.nombre, 'mal');
     return;
   }
   if (linea) linea.cantidad = nueva;
@@ -282,24 +517,29 @@ function renderCarrito() {
 
   for (const l of carrito) {
     const esUnidad = l.producto.unidadMedida === 'unidad';
-    const inCant = el('input', { type: 'number', min: '0.001', step: esUnidad ? '1' : '0.001',
-      value: String(l.cantidad), 'aria-label': 'Cantidad de ' + l.producto.nombre });
-    const inPrecio = el('input', { type: 'number', min: '0.01', step: '0.01',
-      value: l.precio.toFixed(2), 'aria-label': 'Precio de ' + l.producto.nombre });
-    const sub = el('strong', { text: moneda(subtotal(l)) });
+
+    const inCant = el('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off',
+      'data-enteros': '7', 'data-decimales': esUnidad ? '0' : '3',
+      value: String(l.cantidad), 'data-campo': 'cantidad', 'aria-label': 'Cantidad de ' + l.producto.nombre });
+    const inPrecio = el('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off',
+      'data-enteros': '6', 'data-decimales': '2',
+      value: l.precio.toFixed(2), 'data-campo': 'precio', 'aria-label': 'Precio de ' + l.producto.nombre });
+
+    const sub = el('strong', { class: 'linea-sub', text: moneda(subtotal(l)) });
 
     const refrescar = () => { sub.textContent = moneda(subtotal(l)); actualizarTotales(); };
     inCant.addEventListener('input', () => { l.cantidad = Number(inCant.value) || 0; refrescar(); });
     inPrecio.addEventListener('input', () => { l.precio = Number(inPrecio.value) || 0; refrescar(); });
 
-    cont.append(el('div', { class: 'linea' },
+    cont.append(el('div', { class: 'linea', 'data-id': String(l.producto.id) },
       el('div', { class: 'linea-nombre' },
-        el('strong', { text: l.producto.nombre }),
-        el('span', { class: 'sub', text: l.producto.unidadMedida })),
-      inCant, inPrecio, sub,
-      el('button', { class: 'btn chico peligro', type: 'button', text: '✕',
-        'aria-label': 'Quitar ' + l.producto.nombre,
-        onclick: () => { carrito = carrito.filter((x) => x !== l); renderCarrito(); } }),
+        el('strong', { text: icono(l.producto) + ' ' + l.producto.nombre }),
+        el('button', { class: 'btn chico peligro', type: 'button', text: '✕',
+          'aria-label': 'Quitar ' + l.producto.nombre,
+          onclick: () => { carrito = carrito.filter((x) => x !== l); renderCarrito(); } })),
+      el('label', {}, 'Cantidad (' + l.producto.unidadMedida + ')', inCant),
+      el('label', {}, 'Precio (S/)', inPrecio),
+      sub,
     ));
   }
   actualizarTotales();
@@ -316,8 +556,19 @@ function actualizarTotales() {
   if (!(paga > 0)) $('vuelto').textContent = '—';
   else if (paga >= total) $('vuelto').textContent = moneda(paga - total);
   else $('vuelto').textContent = 'Falta ' + moneda(total - paga);
+  actualizarBarraVenta();
 }
 $('paga-con').addEventListener('input', actualizarTotales);
+
+// Barra flotante (solo se ve en tableta/teléfono) con el total de la venta en curso
+function actualizarBarraVenta() {
+  const enCaja = !$('vista-caja').classList.contains('oculto');
+  $('barra-venta').classList.toggle('oculto', !(enCaja && carrito.length > 0));
+  const n = carrito.length;
+  $('bv-cant').textContent = n + (n === 1 ? ' producto' : ' productos');
+  $('bv-total').textContent = moneda(totalCarrito());
+}
+$('barra-venta').addEventListener('click', () => $('carrito').scrollIntoView({ behavior: 'smooth', block: 'start' }));
 
 $('btn-vaciar').addEventListener('click', () => {
   carrito = [];
@@ -350,6 +601,7 @@ $('btn-cobrar').addEventListener('click', async () => {
     renderGrid();
     renderCarrito();
     mensaje('msg-caja', 'Venta registrada: ' + moneda(venta.total), true);
+    refrescarContadorAlertas();
   } catch (e) {
     mensaje('msg-caja', e.message);
   } finally {
@@ -357,12 +609,13 @@ $('btn-cobrar').addEventListener('click', async () => {
   }
 });
 
-
 // ---------- Alertas ----------
 async function refrescarContadorAlertas() {
   try {
     const lista = await Api.get('/api/recordatorios');
-    $('nav-alertas').textContent = lista.length ? 'Alertas (' + lista.length + ')' : 'Alertas';
+    const c = $('cont-alertas');
+    c.textContent = String(lista.length);
+    c.classList.toggle('oculto', lista.length === 0);
   } catch { /* si falla, se deja sin contador */ }
 }
 
@@ -375,6 +628,17 @@ async function cargarAlertas() {
   }
 }
 
+async function accionRapida(a, cant, aviso) {
+  try {
+    await Api.patch('/api/productos/' + (a.idProducto ?? a.productoId) + '/stock', { tipo: 'ajuste', cantidad: cant });
+    toast(aviso);
+    await cargarAlertas();
+    await refrescarContadorAlertas();
+  } catch (e) {
+    toast(e.message, 'mal');
+  }
+}
+
 function renderAlertas(lista) {
   const cont = $('lista-alertas');
   cont.replaceChildren();
@@ -382,21 +646,37 @@ function renderAlertas(lista) {
 
   for (const a of lista) {
     const agotado = a.tipoAlerta === 'agotado';
+    const tieneProducto = (a.idProducto ?? a.productoId) != null;
+    const botones = [];
+    if (tieneProducto) {
+      if (!agotado) {
+        botones.push(el('button', { class: 'btn chico', type: 'button', text: 'Marcar agotado',
+          onclick: async () => {
+            if (await confirmar('Marcar como agotado', 'El stock del producto pasará a 0.', 'Marcar', false)) {
+              accionRapida(a, 0, 'Producto marcado como agotado');
+            }
+          } }));
+      }
+      botones.push(el('button', { class: 'btn chico primario', type: 'button', text: 'Reponer a 5',
+        onclick: () => accionRapida(a, 5, 'Stock repuesto a 5') }));
+    }
+    botones.push(el('button', { class: 'btn chico', type: 'button', text: 'Marcar como leído',
+      onclick: async () => {
+        try {
+          await Api.patch('/api/recordatorios/' + a.id + '/leido');
+          await cargarAlertas();
+          await refrescarContadorAlertas();
+        } catch (e) {
+          mensaje('msg-alertas', e.message);
+        }
+      } }));
+
     cont.append(el('div', { class: 'alerta ' + (agotado ? 'rojo' : 'amarillo') },
       el('div', {},
-        el('strong', { text: agotado ? 'Agotado' : 'Poco stock' }),
+        el('strong', { text: (agotado ? '⛔ Agotado' : '⚠️ Poco stock') }),
         el('span', { text: ' · ' + a.mensaje }),
         el('div', { class: 'sub', text: new Date(a.fechaCreacion).toLocaleString('es-PE') })),
-      el('button', { class: 'btn chico', type: 'button', text: 'Marcar como leído',
-        onclick: async () => {
-          try {
-            await Api.patch('/api/recordatorios/' + a.id + '/leido');
-            await cargarAlertas();
-            await refrescarContadorAlertas();
-          } catch (e) {
-            mensaje('msg-alertas', e.message);
-          }
-        } }),
+      el('div', { class: 'alerta-acciones' }, ...botones),
     ));
   }
 }
@@ -417,7 +697,7 @@ function renderCategorias() {
   ul.replaceChildren();
   for (const c of categorias) {
     ul.append(el('li', { class: 'fila' },
-      el('span', { text: c.nombre }),
+      el('span', { text: '🏷️ ' + c.nombre }),
       el('button', { class: 'btn chico peligro', type: 'button', text: 'Eliminar',
         'aria-label': 'Eliminar categoría ' + c.nombre, onclick: () => eliminarCategoria(c) }),
     ));
@@ -425,12 +705,13 @@ function renderCategorias() {
 }
 
 async function eliminarCategoria(c) {
-  if (!confirm('¿Eliminar la categoría "' + c.nombre + '"?')) return;
+  if (!(await confirmar('¿Eliminar categoría?', 'Se eliminará la categoría "' + c.nombre + '".'))) return;
   mensaje('msg-categorias', '');
   try {
     await Api.del('/api/categorias/' + c.id);
     categorias = categorias.filter((x) => x.id !== c.id);
     renderCategorias();
+    toast('Categoría eliminada');
   } catch (e) {
     mensaje('msg-categorias', e.message);
   }
@@ -445,6 +726,7 @@ $('form-categoria').addEventListener('submit', async (evento) => {
     categorias = [...categorias, nueva].sort((a, b) => a.nombre.localeCompare(b.nombre));
     form.reset();
     renderCategorias();
+    toast('Categoría agregada');
   } catch (e) {
     mensaje('msg-categorias', e.message);
   }
@@ -500,11 +782,11 @@ $('btn-excel').addEventListener('click', async () => {
     enlace.click();
     enlace.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('Excel descargado');
   } catch (e) {
     mensaje('msg-reportes', e.message);
   }
 });
-
 
 // ---------- Mi cuenta (perfil) ----------
 const dlgPerfil = $('dlg-perfil');
@@ -572,6 +854,91 @@ formPassword.addEventListener('submit', async (evento) => {
 
 $('btn-cerrar-perfil').addEventListener('click', () => dlgPerfil.close());
 
+// ---------- Calculadora ----------
+const dlgCalc = $('dlg-calc');
+const calc = { actual: '0', anterior: null, op: null, nuevo: true };
+const TECLAS = [['7', '8', '9', '÷'], ['4', '5', '6', '×'], ['1', '2', '3', '-'], ['0', '.', 'C', '+'], ['=']];
+let lineaActiva = null;   // producto de la última línea del carrito que se tocó
+
+$('lineas-carrito').addEventListener('focusin', (e) => {
+  const linea = e.target.closest ? e.target.closest('.linea') : null;
+  if (linea) lineaActiva = Number(linea.dataset.id);
+});
+
+function calcPintar() { $('calc-pantalla').textContent = calc.actual; }
+function calcReiniciar() { calc.actual = '0'; calc.anterior = null; calc.op = null; calc.nuevo = true; calcPintar(); }
+
+function calcOperar() {
+  if (calc.op === null || calc.anterior === null) return;
+  const a = calc.anterior;
+  const b = Number(calc.actual);
+  let r;
+  if (calc.op === '+') r = a + b;
+  else if (calc.op === '-') r = a - b;
+  else if (calc.op === '×') r = a * b;
+  else r = b === 0 ? NaN : a / b;
+  calc.anterior = null;
+  calc.op = null;
+  calc.nuevo = true;
+  calc.actual = Number.isFinite(r) ? String(Math.round(r * 1e6) / 1e6) : 'Error';
+}
+
+function calcTecla(t) {
+  if (calc.actual === 'Error' && t !== 'C') calcReiniciar();
+  if (t === 'C') { calcReiniciar(); return; }
+  if (/^[0-9]$/.test(t)) {
+    calc.actual = calc.nuevo || calc.actual === '0' ? t : (calc.actual.length < 12 ? calc.actual + t : calc.actual);
+    calc.nuevo = false;
+  } else if (t === '.') {
+    if (calc.nuevo) { calc.actual = '0.'; calc.nuevo = false; }
+    else if (!calc.actual.includes('.')) calc.actual += '.';
+  } else if (t === '=') {
+    calcOperar();
+  } else {   // + - × ÷
+    if (calc.op !== null && !calc.nuevo) calcOperar();
+    if (calc.actual !== 'Error') { calc.anterior = Number(calc.actual); calc.op = t; calc.nuevo = true; }
+  }
+  calcPintar();
+}
+
+for (const fila of TECLAS) {
+  for (const t of fila) {
+    $('calc-teclas').append(el('button', { type: 'button', class: 'btn calc-tecla' + (/[0-9.]/.test(t) ? '' : ' op') + (t === '=' ? ' igual primario' : ''),
+      text: t, 'aria-label': t === 'C' ? 'Borrar' : t, onclick: () => calcTecla(t) }));
+  }
+}
+
+function calcUsar(campo) {
+  calcOperar();
+  calcPintar();
+  const v = Number(calc.actual);
+  if (!Number.isFinite(v) || v < 0) { toast('El resultado no sirve para este campo', 'mal'); return; }
+  let destino;
+  if (campo === 'paga') {
+    destino = $('paga-con');
+  } else {
+    const id = lineaActiva != null ? lineaActiva : (carrito.length ? carrito[carrito.length - 1].producto.id : null);
+    destino = id == null ? null : document.querySelector('.linea[data-id="' + id + '"] input[data-campo="' + campo + '"]');
+  }
+  if (!destino) { toast('Agrega un producto a la venta primero', 'mal'); return; }
+  destino.value = String(v);
+  destino.dispatchEvent(new Event('input', { bubbles: true }));
+  toast('Resultado copiado');
+  dlgCalc.close();
+}
+document.querySelectorAll('[data-usar]').forEach((b) => b.addEventListener('click', () => calcUsar(b.dataset.usar)));
+$('btn-calc').addEventListener('click', () => { calcReiniciar(); dlgCalc.showModal(); });
+$('calc-cerrar').addEventListener('click', () => dlgCalc.close());
+
+// ---------- Conexión y PWA ----------
+function pintarConexion() { $('aviso-offline').classList.toggle('oculto', navigator.onLine); }
+window.addEventListener('online', pintarConexion);
+window.addEventListener('offline', pintarConexion);
+pintarConexion();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => { /* sin PWA */ }); });
+}
 
 // ---------- arranque ----------
 if (Api.sesion()) mostrarApp(); else mostrarAuth();

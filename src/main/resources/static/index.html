@@ -2,113 +2,189 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
   <title>BarrioMarket</title>
+  <link rel="icon" href="data:,">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#1f7a4d">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <script src="/js/tema.js"></script>
   <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
 
-<main id="pantalla-auth" class="auth">
-  <h1>BarrioMarket</h1>
-  <p class="sub">Inventario simple para tu bodega</p>
-<!-- BOTONES -->
-  <div class="tabs">
-    <button type="button" class="tab activa" data-auth="login">Ingresar</button>
-    <button type="button" class="tab" data-auth="registro">Crear cuenta</button>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<div id="aviso-offline" class="aviso-offline oculto" role="status">Sin conexión. Algunas acciones no estarán disponibles hasta que vuelva el internet.</div>
 
+<main id="pantalla-auth" class="auth-fondo">
+  <div class="auth">
+    <button type="button" class="btn-tema btn icono auth-tema" aria-label="Cambiar modo claro/oscuro"></button>
+    <div class="auth-marca">
+      <span class="logo" aria-hidden="true">🛒</span>
+      <h1>BarrioMarket</h1>
+      <p class="sub">Inventario simple para tu bodega</p>
+    </div>
+
+    <div class="tabs">
+      <button type="button" class="tab activa" data-auth="login">Ingresar</button>
+      <button type="button" class="tab" data-auth="registro">Crear cuenta</button>
+    </div>
+
+    <form id="form-login" class="card form">
+      <label>Teléfono
+        <input name="telefono" inputmode="numeric" maxlength="9" required autocomplete="username" placeholder="9XXXXXXXX">
+      </label>
+      <label>Contraseña
+        <input name="password" type="password" required autocomplete="current-password">
+      </label>
+      <p class="error" role="alert"></p>
+      <button class="btn primario grande" type="submit">Ingresar</button>
+    </form>
+
+    <form id="form-registro" class="card form oculto">
+      <label>Nombre
+        <input name="nombre" maxlength="100" required autocomplete="name">
+      </label>
+      <label>Teléfono (9 dígitos, empieza con 9)
+        <input name="telefono" inputmode="numeric" maxlength="9" pattern="9[0-9]{8}" required autocomplete="username">
+      </label>
+      <label>Correo (opcional)
+        <input name="email" type="email" maxlength="100" autocomplete="email">
+      </label>
+      <label>Contraseña (mínimo 8 caracteres)
+        <input name="password" type="password" minlength="8" maxlength="72" required autocomplete="new-password">
+      </label>
+      <p class="error" role="alert"></p>
+      <button class="btn primario grande" type="submit">Crear cuenta</button>
+    </form>
   </div>
-
-  <form id="form-login" class="card form">
-    <label>Teléfono
-      <input name="telefono" inputmode="numeric" maxlength="9" required autocomplete="username">
-    </label>
-    <label>Contraseña
-      <input name="password" type="password" required autocomplete="current-password">
-    </label>
-    <p class="error" role="alert"></p>
-    <button class="btn primario" type="submit">Ingresar</button>
-  </form>
-
-  <form id="form-registro" class="card form oculto">
-    <label>Nombre
-      <input name="nombre" maxlength="100" required autocomplete="name">
-    </label>
-    <label>Teléfono (9 dígitos, empieza con 9)
-      <input name="telefono" inputmode="numeric" maxlength="9" pattern="9[0-9]{8}" required autocomplete="username">
-    </label>
-    <label>Correo (opcional)
-      <input name="email" type="email" maxlength="100" autocomplete="email">
-    </label>
-    <label>Contraseña (mínimo 8 caracteres)
-      <input name="password" type="password" minlength="8" maxlength="72" required autocomplete="new-password">
-    </label>
-    <p class="error" role="alert"></p>
-    <button class="btn primario" type="submit">Crear cuenta</button>
-  </form>
 </main>
 
 <div id="pantalla-app" class="oculto">
   <header class="barra">
-    <strong class="marca">BarrioMarket</strong>
-    <nav id="menu">
-      <button type="button" class="nav activa" data-vista="inventario">Inventario</button>
-      <button type="button" class="nav" data-vista="caja">Caja</button>
-      <button type="button" class="nav" id="nav-alertas" data-vista="alertas">Alertas</button>
-      <button type="button" class="nav" data-vista="categorias">Categorías</button>
-      <button type="button" class="nav" data-vista="reportes">Reportes</button>
-      <button type="button" id="btn-perfil" class="btn">Mi cuenta</button>
+    <strong class="marca"><span aria-hidden="true">🛒</span> BarrioMarket</strong>
+    <nav id="menu" aria-label="Secciones">
+      <button type="button" class="nav activa" data-vista="inicio"><span class="ico" aria-hidden="true">🏠</span><span class="txt">Inicio</span></button>
+      <button type="button" class="nav" data-vista="inventario"><span class="ico" aria-hidden="true">📦</span><span class="txt">Inventario</span></button>
+      <button type="button" class="nav" data-vista="caja"><span class="ico" aria-hidden="true">💰</span><span class="txt">Caja</span></button>
+      <button type="button" class="nav" id="nav-alertas" data-vista="alertas"><span class="ico" aria-hidden="true">🔔</span><span class="txt">Alertas</span><span id="cont-alertas" class="contador oculto"></span></button>
+      <button type="button" class="nav" data-vista="categorias"><span class="ico" aria-hidden="true">🏷️</span><span class="txt">Categorías</span></button>
+      <button type="button" class="nav" data-vista="reportes"><span class="ico" aria-hidden="true">📊</span><span class="txt">Reportes</span></button>
     </nav>
-    <span id="usuario-nombre" class="usuario"></span>
-    <button type="button" id="btn-salir" class="btn">Salir</button>
+    <div class="barra-der">
+      <span id="usuario-nombre" class="usuario"></span>
+      <button type="button" class="btn-tema btn icono" aria-label="Cambiar modo claro/oscuro"></button>
+      <button type="button" id="btn-perfil" class="btn icono" aria-label="Mi cuenta" title="Mi cuenta">👤</button>
+      <button type="button" id="btn-salir" class="btn" aria-label="Salir">Salir</button>
+    </div>
   </header>
-<!-- VISTAS -->
+
   <main class="contenido">
-    <section id="vista-inventario" class="vista">
-      <div class="herramientas">
-        <input id="buscar" type="search" placeholder="Buscar producto…" aria-label="Buscar producto">
+
+    <section id="vista-inicio" class="vista">
+      <h2>Resumen</h2>
+      <p id="saludo" class="sub"></p>
+      <p id="msg-inicio" class="error" role="alert"></p>
+
+      <div class="stats">
+        <button type="button" class="stat" data-filtro="todos">
+          <span class="stat-ico" aria-hidden="true">📦</span>
+          <span class="stat-num" id="st-total">0</span>
+          <span class="stat-txt">Productos</span>
+        </button>
+        <button type="button" class="stat verde" data-filtro="verde">
+          <span class="stat-ico" aria-hidden="true">✅</span>
+          <span class="stat-num" id="st-verde">0</span>
+          <span class="stat-txt">Disponibles</span>
+        </button>
+        <button type="button" class="stat amarillo" data-filtro="amarillo">
+          <span class="stat-ico" aria-hidden="true">⚠️</span>
+          <span class="stat-num" id="st-amarillo">0</span>
+          <span class="stat-txt">Poco stock</span>
+        </button>
+        <button type="button" class="stat rojo" data-filtro="rojo">
+          <span class="stat-ico" aria-hidden="true">⛔</span>
+          <span class="stat-num" id="st-rojo">0</span>
+          <span class="stat-txt">Agotados</span>
+        </button>
+      </div>
+
+      <div class="paneles">
+        <div class="card panel">
+          <h3>Ventas de hoy</h3>
+          <p class="gran" id="ventas-hoy">S/ 0.00</p>
+          <p class="sub" id="ventas-hoy-det">—</p>
+          <button type="button" class="btn primario" data-ir="caja">Ir a la Caja</button>
+        </div>
+        <div class="card panel">
+          <h3>Por agotarse</h3>
+          <ul id="lista-por-agotar" class="mini"></ul>
+          <p id="sin-por-agotar" class="sub oculto">Todo en orden, nada por agotarse.</p>
+        </div>
+        <div class="card panel panel-ancho">
+          <h3>Últimas actualizaciones</h3>
+          <p class="sub">Aquí verás los últimos cambios de stock. Próximamente.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="vista-inventario" class="vista oculto">
+      <div class="titulo-fila">
+        <h2>Inventario</h2>
         <button type="button" id="btn-nuevo" class="btn primario">+ Nuevo producto</button>
       </div>
+      <div class="herramientas">
+        <input id="buscar" type="search" placeholder="Buscar producto…" aria-label="Buscar producto">
+      </div>
+      <div id="chips-estado" class="chips" aria-label="Filtrar por estado">
+        <button type="button" class="chip activa" data-filtro="todos">Todos</button>
+        <button type="button" class="chip" data-filtro="verde">Disponibles</button>
+        <button type="button" class="chip" data-filtro="amarillo">Poco stock</button>
+        <button type="button" class="chip" data-filtro="rojo">Agotados</button>
+      </div>
+      <div id="chips-categoria" class="chips" aria-label="Filtrar por categoría"></div>
       <p id="msg-inventario" class="error" role="alert"></p>
-      <div class="tabla-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Producto</th><th>Categoría</th><th class="num">Precio</th>
-              <th class="num">Stock</th><th>Estado</th><th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-productos"></tbody>
-        </table>
-      </div>
+      <div id="grid-inventario" class="grid-inv"></div>
       <p id="vacio-inventario" class="sub oculto">Aún no tienes productos. Crea el primero.</p>
+      <p id="sin-resultados" class="sub oculto">Ningún producto coincide con el filtro.</p>
     </section>
-    
+
     <section id="vista-caja" class="vista oculto">
-  <div class="caja">
-    <div class="caja-productos">
-      <input id="buscar-caja" type="search" placeholder="Buscar producto…" aria-label="Buscar producto para vender">
-      <div id="grid-caja" class="grid-caja"></div>
-    </div>
-
-    <aside class="card caja-carrito">
-      <h2>Venta</h2>
-      <p id="carrito-vacio" class="sub">Toca un producto para agregarlo.</p>
-      <div id="lineas-carrito"></div>
-
-      <div class="total"><span>Total</span><strong id="total-venta">S/ 0.00</strong></div>
-
-      <label>Cliente paga con (S/)
-        <input id="paga-con" type="number" step="0.10" min="0" inputmode="decimal">
-      </label>
-      <p class="vuelto">Vuelto: <strong id="vuelto">—</strong></p>
-
-      <p id="msg-caja" class="error" role="alert"></p>
-      <div class="acciones-form">
-        <button type="button" id="btn-vaciar" class="btn">Vaciar</button>
-        <button type="button" id="btn-cobrar" class="btn primario">Cobrar</button>
+      <div class="titulo-fila">
+        <h2>Caja</h2>
+        <button type="button" id="btn-calc" class="btn">🧮 Calculadora</button>
       </div>
-    </aside>
-  </div>
+      <div class="caja">
+        <div class="caja-productos">
+          <input id="buscar-caja" type="search" placeholder="Buscar producto…" aria-label="Buscar producto para vender">
+          <div id="grid-caja" class="grid-caja"></div>
+        </div>
+
+        <aside id="carrito" class="card caja-carrito">
+          <h3>Venta actual</h3>
+          <p id="carrito-vacio" class="sub">Toca un producto para agregarlo.</p>
+          <div id="lineas-carrito"></div>
+
+          <div class="total"><span>Total</span><strong id="total-venta">S/ 0.00</strong></div>
+
+          <label>El cliente paga con (S/)
+            <input id="paga-con" type="text" inputmode="decimal" autocomplete="off" data-enteros="6" data-decimales="2" placeholder="0.00">
+          </label>
+          <p class="vuelto">Vuelto: <strong id="vuelto">—</strong></p>
+
+          <p id="msg-caja" class="error" role="alert"></p>
+          <div class="acciones-form">
+            <button type="button" id="btn-vaciar" class="btn">Vaciar</button>
+            <button type="button" id="btn-cobrar" class="btn primario grande">Cobrar</button>
+          </div>
+        </aside>
+      </div>
+      <button type="button" id="barra-venta" class="barra-venta oculto">
+        <span id="bv-cant">0 productos</span>
+        <strong id="bv-total">S/ 0.00</strong>
+        <span>Ver venta ↓</span>
+      </button>
     </section>
 
     <section id="vista-alertas" class="vista oculto">
@@ -130,7 +206,7 @@
 
     <section id="vista-reportes" class="vista oculto">
       <h2>Reporte de ventas</h2>
-      <div class="herramientas">
+      <div class="herramientas filtros-rep">
         <label>Desde <input id="rep-desde" type="date"></label>
         <label>Hasta <input id="rep-hasta" type="date"></label>
         <button type="button" id="btn-ver-reporte" class="btn primario">Ver</button>
@@ -159,24 +235,34 @@
       <input name="nombre" maxlength="100" required>
     </label>
     <label>Categoría
-      <select name="idCategoria" required></select>
+      <select name="idCategoria"></select>
     </label>
-    <label>Precio (S/)
-      <input name="precio" type="number" step="0.01" min="0.01" required>
+    <label>O crea una nueva categoría
+      <input name="nuevaCategoria" maxlength="50" autocomplete="off" placeholder="Ej: Lácteos (opcional)">
     </label>
-    <label>Unidad de medida
-      <select name="unidadMedida">
-        <option value="unidad">Unidad</option>
-        <option value="kg">Kilogramo</option>
-        <option value="litro">Litro</option>
-      </select>
-    </label>
-    <label>Stock
-      <input name="stock" type="number" step="0.001" min="0" required>
-    </label>
-    <label>Avisar cuando quede (stock mínimo, opcional)
-      <input name="stockMinimo" type="number" step="0.001" min="0" placeholder="3">
-    </label>
+    <div class="dos-col">
+      <label>Precio (S/)
+        <input name="precio" type="text" inputmode="decimal" autocomplete="off"
+         data-enteros="6" data-decimales="2" required placeholder="0.00">
+      </label>
+      <label>Unidad de medida
+        <select name="unidadMedida">
+          <option value="unidad">Unidad</option>
+          <option value="kg">Kilogramo</option>
+          <option value="litro">Litro</option>
+        </select>
+      </label>
+    </div>
+    <div class="dos-col">
+      <label>Stock
+        <input name="stock" type="text" inputmode="decimal" autocomplete="off"
+              data-enteros="7" data-decimales="3" required placeholder="0">
+      </label>
+      <label>Avisar cuando quede
+        <input name="stockMinimo" type="text" inputmode="decimal" autocomplete="off"
+              data-enteros="7" data-decimales="3" placeholder="3 (opcional)">
+      </label>
+    </div>
     <p class="error" role="alert"></p>
     <div class="acciones-form">
       <button type="button" id="btn-cancelar" class="btn">Cancelar</button>
@@ -224,6 +310,32 @@
   </div>
 </dialog>
 
+<dialog id="dlg-calc" class="dlg-chico">
+  <div class="form">
+    <h2>Calculadora</h2>
+    <div id="calc-pantalla" class="calc-pantalla" aria-live="polite">0</div>
+    <div id="calc-teclas" class="calc-teclas"></div>
+    <div class="calc-usar">
+      <button type="button" class="btn" data-usar="cantidad">Usar en cantidad</button>
+      <button type="button" class="btn" data-usar="precio">Usar en precio</button>
+      <button type="button" class="btn" data-usar="paga">Usar en "paga con"</button>
+    </div>
+    <div class="acciones-form">
+      <button type="button" id="calc-cerrar" class="btn">Cerrar</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlg-confirmar" class="dlg-chico">
+  <form method="dialog" class="form">
+    <h2 id="confirmar-titulo">¿Seguro?</h2>
+    <p id="confirmar-texto" class="sub"></p>
+    <div class="acciones-form">
+      <button type="button" id="confirmar-no" class="btn">Cancelar</button>
+      <button type="button" id="confirmar-si" class="btn peligro-lleno">Eliminar</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="/js/api.js"></script>
 <script src="/js/app.js"></script>
