@@ -312,7 +312,7 @@ async function ajustar(p, tipo, cant) {
   }
 }
 
-// ---------- Interruptor táctil de 3 estados (verde → amarillo → rojo → verde) ----------
+// ---------- Interruptor táctil de 3 estados (verde > amarillo > rojo > verde) ---------- NO BORRAR 
 const ICONO_ESTADO = { verde: '🟢', amarillo: '🟡', rojo: '🔴' };
 
 // Stock que corresponde a cada color, según la misma regla del semáforo del servidor
@@ -460,7 +460,7 @@ async function cargarCaja() {
   mensaje('msg-caja', '');
   try {
     productos = await Api.get('/api/productos');
-    // refresca las líneas con el stock actual y descarta productos que ya no existen
+    // refresca las líneas con el stock actual y descarta productos que ya no existen - FUNCION DE MAPEO NO BORRAR - | CUIDADO!!!!
     carrito = carrito
       .map((l) => ({ ...l, producto: productos.find((p) => p.id === l.producto.id) }))
       .filter((l) => l.producto);
@@ -741,6 +741,25 @@ async function cargarReportes() {
   if (!$('rep-hasta').value) {
     const hoy = new Date();
     $('rep-hasta').value = hoyISO();
+    //ACTUALIACIÓN - Se agregan botones de hoy y ayer, para má comodidad
+    function seleccionarDiaReporte(fecha) {
+      const dia = fecha.toLocaleDateString('en-CA');
+      $('rep-desde').value = dia;
+      $('rep-hasta').value = dia;
+      verReporte();
+    }
+
+    $('btn-rep-hoy').addEventListener('click', () => {
+      seleccionarDiaReporte(new Date());
+    });
+
+    $('btn-rep-ayer').addEventListener('click', () => {
+      const ayer = new Date();
+      ayer.setDate(ayer.getDate() - 1);
+      seleccionarDiaReporte(ayer);
+    });
+
+
     $('rep-desde').value = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toLocaleDateString('en-CA');
   }
   await verReporte();
