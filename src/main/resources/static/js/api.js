@@ -43,8 +43,27 @@ const Api = (() => {
     return datos;
   }
 
+    // Descarga de archivos EXCEL NO BORRAR
+  async function blob(ruta) {
+    const s = sesion();
+    let resp;
+    try {
+      resp = await fetch(ruta, { headers: s && s.token ? { Authorization: 'Bearer ' + s.token } : {} });
+    } catch {
+      throw new Error('No hay conexión con el servidor');
+    }
+    if (resp.status === 401) { limpiar(); alExpirar(); throw new Error('Tu sesión expiró, ingresa de nuevo'); }
+    if (!resp.ok) {
+      let d = null;
+      try { d = await resp.json(); } catch { /* sin cuerpo */ }
+      throw new Error((d && d.error) || 'Error ' + resp.status);
+    }
+    return resp.blob();
+  }
+
+
   return {
-    sesion, guardar, limpiar,
+    sesion, guardar, limpiar,blob,
     alExpirar(fn) { alExpirar = fn; },
     get: (r) => pedir('GET', r),
     post: (r, b) => pedir('POST', r, b),

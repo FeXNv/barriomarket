@@ -6,6 +6,8 @@ import com.fexsolutions.barriomarket.entity.Usuario;
 import com.fexsolutions.barriomarket.repository.CategoriaRepository;
 import com.fexsolutions.barriomarket.repository.UsuarioRepository;
 import com.fexsolutions.barriomarket.security.JwtService;
+import com.fexsolutions.barriomarket.security.LoginThrottle;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -13,7 +15,8 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.fexsolutions.barriomarket.security.LoginThrottle;
+import com.fexsolutions.barriomarket.exception.DemasiadosIntentosException;
 import java.util.List;
 
 @Service
@@ -28,6 +31,7 @@ public class AuthService {
     private final CategoriaRepository categorias;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
+    private final LoginThrottle throttle;
 
     @Transactional
     public AuthResponse registrar(RegistroRequest req) {
@@ -58,12 +62,21 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest req) {
-        Usuario u = usuarios.findByTelefonoAndDeletedAtIsNull(req.telefono())
+        String clave = req.telefono().trim();
+        if (throttle.bloqueado(clave)) {
+            log.warn("Login bloqueado por demasiados intentos fallidos");
+            throw new DemasiadosIntentosException("Demasiados intentos fallidos. Intenta de nuevo en unos minutos");
+        }
+
+        Usuario u = usuarios.findByTelefonoAndDeletedAtIsNull(clave)
                 .filter(x -> encoder.matches(req.password(), x.getPasswordHash()))
                 .orElseThrow(() -> {
+                    throttle.registrarFallo(clave);
                     log.warn("Login fallido");
                     return new BadCredentialsException("Credenciales inválidas");
                 });
+
+        throttle.limpiar(clave);
         log.info("Login correcto id={}", u.getId());
         return new AuthResponse(jwt.generar(u.getId()), u.getId(), u.getNombre());
     }

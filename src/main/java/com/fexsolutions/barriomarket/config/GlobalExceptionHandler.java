@@ -7,6 +7,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.fexsolutions.barriomarket.exception.DemasiadosIntentosException;
 import com.fexsolutions.barriomarket.exception.NoEncontradoException;
 import java.util.Map;
 
@@ -39,5 +40,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoEncontradoException.class)
     public ResponseEntity<Map<String, String>> noEncontrado(NoEncontradoException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(DemasiadosIntentosException.class)
+    public ResponseEntity<Map<String, String>> demasiadosIntentos(DemasiadosIntentosException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", ex.getMessage()));
     }
 }

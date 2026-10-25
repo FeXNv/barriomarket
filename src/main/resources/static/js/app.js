@@ -35,13 +35,22 @@ function mostrarApp() {
   cambiarVista('inventario');
 }
 
-const cargadores = { inventario: cargarInventario };
+const cargadores = {
+  inventario: cargarInventario,
+  caja: cargarCaja,
+  alertas: cargarAlertas,
+  categorias: cargarCategorias,
+  reportes: cargarReportes,
+};
 
 function cambiarVista(nombre) {
   document.querySelectorAll('.nav').forEach((b) => b.classList.toggle('activa', b.dataset.vista === nombre));
   document.querySelectorAll('.vista').forEach((v) => v.classList.toggle('oculto', v.id !== 'vista-' + nombre));
   if (cargadores[nombre]) cargadores[nombre]();
+  refrescarContadorAlertas();
 }
+
+
 
 // ---------- autenticación ----------
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
@@ -199,6 +208,300 @@ formProducto.addEventListener('submit', async (evento) => {
     renderInventario();
   } catch (e) {
     error.textContent = e.message;
+  }
+});
+// ---------- Modo Caja ----------
+let carrito = [];   // cada línea: { producto, cantidad, precio }
+const FRACCIONES = [['1', 1], ['½', 0.5], ['¼', 0.25], ['⅛', 0.125]];
+const redondear3 = (n) => Math.round(n * 1000) / 1000;
+const subtotal = (l) => Math.round(l.cantidad * l.precio * 100) / 100;
+
+function mensaje(id, texto, ok = false) {
+  const e = $(id);
+  e.textContent = texto;
+  e.classList.toggle('ok', ok);
+}
+
+async function cargarCaja() {
+  mensaje('msg-caja', '');
+  try {
+    productos = await Api.get('/api/productos');
+    // refresca las líneas con el stock actual y descarta productos que ya no existen
+    carrito = carrito
+      .map((l) => ({ ...l, producto: productos.find((p) => p.id === l.producto.id) }))
+      .filter((l) => l.producto);
+    renderGrid();
+    renderCarrito();
+  } catch (e) {
+    mensaje('msg-caja', e.message);
+  }
+}
+
+function renderGrid() {
+  const filtro = $('buscar-caja').value.trim().toLowerCase();
+  const grid = $('grid-caja');
+  grid.replaceChildren();
+
+  for (const p of productos.filter((x) => x.nombre.toLowerCase().includes(filtro))) {
+    const agotado = Number(p.stock) <= 0;
+    const bloqueo = agotado ? { disabled: '' } : {};
+    const botones = p.unidadMedida === 'unidad'
+      ? [el('button', { class: 'btn chico', type: 'button', text: '+1',
+          'aria-label': 'Agregar 1 ' + p.nombre, ...bloqueo, onclick: () => agregar(p, 1) })]
+      : FRACCIONES.map(([txt, val]) => el('button', { class: 'btn chico', type: 'button', text: txt,
+          'aria-label': 'Agregar ' + txt + ' ' + p.unidadMedida + ' de ' + p.nombre,
+          ...bloqueo, onclick: () => agregar(p, val) }));
+
+    grid.append(el('div', { class: 'tile' + (agotado ? ' agotada' : '') },
+      el('strong', { text: p.nombre }),
+      el('span', { class: 'sub', text: moneda(p.precio) + ' / ' + p.unidadMedida }),
+      el('span', { class: 'badge ' + p.estado, text: cantidad(p.stock) + ' ' + p.unidadMedida }),
+      el('div', { class: 'acciones' }, ...botones),
+    ));
+  }
+}
+$('buscar-caja').addEventListener('input', renderGrid);
+
+function agregar(p, cant) {
+  mensaje('msg-caja', '');
+  const linea = carrito.find((l) => l.producto.id === p.id);
+  const nueva = redondear3((linea ? linea.cantidad : 0) + cant);
+  if (nueva > Number(p.stock)) {
+    mensaje('msg-caja', 'No hay suficiente stock de ' + p.nombre);
+    return;
+  }
+  if (linea) linea.cantidad = nueva;
+  else carrito.push({ producto: p, cantidad: cant, precio: Number(p.precio) });
+  renderCarrito();
+}
+
+function renderCarrito() {
+  const cont = $('lineas-carrito');
+  cont.replaceChildren();
+  $('carrito-vacio').classList.toggle('oculto', carrito.length > 0);
+
+  for (const l of carrito) {
+    const esUnidad = l.producto.unidadMedida === 'unidad';
+    const inCant = el('input', { type: 'number', min: '0.001', step: esUnidad ? '1' : '0.001',
+      value: String(l.cantidad), 'aria-label': 'Cantidad de ' + l.producto.nombre });
+    const inPrecio = el('input', { type: 'number', min: '0.01', step: '0.01',
+      value: l.precio.toFixed(2), 'aria-label': 'Precio de ' + l.producto.nombre });
+    const sub = el('strong', { text: moneda(subtotal(l)) });
+
+    const refrescar = () => { sub.textContent = moneda(subtotal(l)); actualizarTotales(); };
+    inCant.addEventListener('input', () => { l.cantidad = Number(inCant.value) || 0; refrescar(); });
+    inPrecio.addEventListener('input', () => { l.precio = Number(inPrecio.value) || 0; refrescar(); });
+
+    cont.append(el('div', { class: 'linea' },
+      el('div', { class: 'linea-nombre' },
+        el('strong', { text: l.producto.nombre }),
+        el('span', { class: 'sub', text: l.producto.unidadMedida })),
+      inCant, inPrecio, sub,
+      el('button', { class: 'btn chico peligro', type: 'button', text: '✕',
+        'aria-label': 'Quitar ' + l.producto.nombre,
+        onclick: () => { carrito = carrito.filter((x) => x !== l); renderCarrito(); } }),
+    ));
+  }
+  actualizarTotales();
+}
+
+function totalCarrito() {
+  return Math.round(carrito.reduce((s, l) => s + subtotal(l), 0) * 100) / 100;
+}
+
+function actualizarTotales() {
+  const total = totalCarrito();
+  $('total-venta').textContent = moneda(total);
+  const paga = Number($('paga-con').value);
+  if (!(paga > 0)) $('vuelto').textContent = '—';
+  else if (paga >= total) $('vuelto').textContent = moneda(paga - total);
+  else $('vuelto').textContent = 'Falta ' + moneda(total - paga);
+}
+$('paga-con').addEventListener('input', actualizarTotales);
+
+$('btn-vaciar').addEventListener('click', () => {
+  carrito = [];
+  $('paga-con').value = '';
+  mensaje('msg-caja', '');
+  renderCarrito();
+});
+
+$('btn-cobrar').addEventListener('click', async () => {
+  if (carrito.length === 0) { mensaje('msg-caja', 'Agrega productos a la venta'); return; }
+  if (carrito.some((l) => !(l.cantidad > 0) || !(l.precio > 0))) {
+    mensaje('msg-caja', 'Revisa cantidades y precios: deben ser mayores que cero');
+    return;
+  }
+
+  const items = carrito.map((l) => {
+    const item = { idProducto: l.producto.id, cantidad: l.cantidad };
+    // el precio solo se envía si el bodeguero lo cambió respecto al de lista
+    if (Math.abs(l.precio - Number(l.producto.precio)) > 0.0001) item.precioUnitario = l.precio;
+    return item;
+  });
+
+  const boton = $('btn-cobrar');
+  boton.disabled = true;
+  try {
+    const venta = await Api.post('/api/ventas', { items });
+    carrito = [];
+    $('paga-con').value = '';
+    productos = await Api.get('/api/productos');
+    renderGrid();
+    renderCarrito();
+    mensaje('msg-caja', 'Venta registrada: ' + moneda(venta.total), true);
+  } catch (e) {
+    mensaje('msg-caja', e.message);
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+
+// ---------- Alertas ----------
+async function refrescarContadorAlertas() {
+  try {
+    const lista = await Api.get('/api/recordatorios');
+    $('nav-alertas').textContent = lista.length ? 'Alertas (' + lista.length + ')' : 'Alertas';
+  } catch { /* si falla, se deja sin contador */ }
+}
+
+async function cargarAlertas() {
+  mensaje('msg-alertas', '');
+  try {
+    renderAlertas(await Api.get('/api/recordatorios'));
+  } catch (e) {
+    mensaje('msg-alertas', e.message);
+  }
+}
+
+function renderAlertas(lista) {
+  const cont = $('lista-alertas');
+  cont.replaceChildren();
+  $('sin-alertas').classList.toggle('oculto', lista.length > 0);
+
+  for (const a of lista) {
+    const agotado = a.tipoAlerta === 'agotado';
+    cont.append(el('div', { class: 'alerta ' + (agotado ? 'rojo' : 'amarillo') },
+      el('div', {},
+        el('strong', { text: agotado ? 'Agotado' : 'Poco stock' }),
+        el('span', { text: ' · ' + a.mensaje }),
+        el('div', { class: 'sub', text: new Date(a.fechaCreacion).toLocaleString('es-PE') })),
+      el('button', { class: 'btn chico', type: 'button', text: 'Marcar como leído',
+        onclick: async () => {
+          try {
+            await Api.patch('/api/recordatorios/' + a.id + '/leido');
+            await cargarAlertas();
+            await refrescarContadorAlertas();
+          } catch (e) {
+            mensaje('msg-alertas', e.message);
+          }
+        } }),
+    ));
+  }
+}
+
+// ---------- Categorías ----------
+async function cargarCategorias() {
+  mensaje('msg-categorias', '');
+  try {
+    categorias = await Api.get('/api/categorias');
+    renderCategorias();
+  } catch (e) {
+    mensaje('msg-categorias', e.message);
+  }
+}
+
+function renderCategorias() {
+  const ul = $('lista-categorias');
+  ul.replaceChildren();
+  for (const c of categorias) {
+    ul.append(el('li', { class: 'fila' },
+      el('span', { text: c.nombre }),
+      el('button', { class: 'btn chico peligro', type: 'button', text: 'Eliminar',
+        'aria-label': 'Eliminar categoría ' + c.nombre, onclick: () => eliminarCategoria(c) }),
+    ));
+  }
+}
+
+async function eliminarCategoria(c) {
+  if (!confirm('¿Eliminar la categoría "' + c.nombre + '"?')) return;
+  mensaje('msg-categorias', '');
+  try {
+    await Api.del('/api/categorias/' + c.id);
+    categorias = categorias.filter((x) => x.id !== c.id);
+    renderCategorias();
+  } catch (e) {
+    mensaje('msg-categorias', e.message);
+  }
+}
+
+$('form-categoria').addEventListener('submit', async (evento) => {
+  evento.preventDefault();
+  const form = evento.target;
+  mensaje('msg-categorias', '');
+  try {
+    const nueva = await Api.post('/api/categorias', { nombre: form.elements.nombre.value });
+    categorias = [...categorias, nueva].sort((a, b) => a.nombre.localeCompare(b.nombre));
+    form.reset();
+    renderCategorias();
+  } catch (e) {
+    mensaje('msg-categorias', e.message);
+  }
+});
+
+// ---------- Reportes ----------
+const hoyISO = () => new Date().toLocaleDateString('en-CA');   // AAAA-MM-DD en hora local
+const rangoReporte = () =>
+  '?desde=' + encodeURIComponent($('rep-desde').value) + '&hasta=' + encodeURIComponent($('rep-hasta').value);
+
+async function cargarReportes() {
+  if (!$('rep-hasta').value) {
+    const hoy = new Date();
+    $('rep-hasta').value = hoyISO();
+    $('rep-desde').value = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toLocaleDateString('en-CA');
+  }
+  await verReporte();
+}
+
+async function verReporte() {
+  mensaje('msg-reportes', '');
+  try {
+    const filas = await Api.get('/api/reportes/ventas' + rangoReporte());
+    const cuerpo = $('tbody-reporte');
+    cuerpo.replaceChildren();
+    let total = 0;
+    for (const f of filas) {
+      total += Number(f.subtotal);
+      cuerpo.append(el('tr', {},
+        el('td', { text: String(f.idVenta) }),
+        el('td', { text: new Date(f.fecha).toLocaleString('es-PE') }),
+        el('td', { text: f.producto }),
+        el('td', { class: 'num', text: cantidad(f.cantidad) }),
+        el('td', { class: 'num', text: moneda(f.precioUnitario) }),
+        el('td', { class: 'num', text: moneda(f.subtotal) }),
+      ));
+    }
+    $('resumen-reporte').textContent = filas.length ? filas.length + ' líneas de venta · Total' : 'Sin ventas en este rango';
+    $('total-reporte').textContent = filas.length ? moneda(total) : '';
+  } catch (e) {
+    mensaje('msg-reportes', e.message);
+  }
+}
+$('btn-ver-reporte').addEventListener('click', verReporte);
+
+$('btn-excel').addEventListener('click', async () => {
+  mensaje('msg-reportes', '');
+  try {
+    const archivo = await Api.blob('/api/reportes/ventas/excel' + rangoReporte());
+    const url = URL.createObjectURL(archivo);
+    const enlace = el('a', { href: url, download: 'ventas-' + $('rep-desde').value + '-a-' + $('rep-hasta').value + '.xlsx' });
+    document.body.append(enlace);
+    enlace.click();
+    enlace.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) {
+    mensaje('msg-reportes', e.message);
   }
 });
 
