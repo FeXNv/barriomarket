@@ -471,11 +471,13 @@ formProducto.addEventListener('submit', async (evento) => {
       : [...productos, guardado].sort((a, b) => a.nombre.localeCompare(b.nombre));
     dialogo.close();
     renderInventario();
+    if (!editando) await refrescarContadorAlertas();
     toast(editando ? 'Producto actualizado' : 'Producto creado');
   } catch (e) {
     error.textContent = e.message;
   }
 });
+
 
 // ---------- Modo Caja ----------
 let carrito = [];   // cada línea: { producto, cantidad, precio }
@@ -993,6 +995,9 @@ pintarConexion();
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => { /* sin PWA */ }); });
 }
+
+
+
 
 // ---------- arranque ----------
 if (Api.sesion()) mostrarApp(); else mostrarAuth();

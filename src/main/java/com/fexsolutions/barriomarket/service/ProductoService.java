@@ -10,7 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.fexsolutions.barriomarket.service.RecordatorioService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,6 +23,8 @@ public class ProductoService {
     private final ProductoRepository productos;
     private final CategoriaRepository categorias;
     private final SemaforoService semaforo;
+    private final RecordatorioService recordatorios;
+
 
     @Transactional(readOnly = true)
     public List<ProductoResponse> listar(Integer idUsuario) {
@@ -41,8 +43,10 @@ public class ProductoService {
         p.setIdUsuario(idUsuario);
         aplicar(p, req);
         Producto guardado = productos.save(p);
+        recordatorios.sincronizar(guardado);
         log.info("Producto creado id={} usuario={}", guardado.getId(), idUsuario);
         return ProductoResponse.de(guardado);
+
     }
 
     @Transactional
