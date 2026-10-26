@@ -33,7 +33,7 @@ class ProductoServiceTest {
 
     @BeforeEach
     void preparar() {
-        service = new ProductoService(productos, categorias, new SemaforoService());
+        service = new ProductoService(productos, categorias, new SemaforoService(), null);
     }
 
     private ProductoRequest req(String stock, String unidad) {

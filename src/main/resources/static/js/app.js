@@ -472,6 +472,7 @@ formProducto.addEventListener('submit', async (evento) => {
     dialogo.close();
     renderInventario();
     if (!editando) await refrescarContadorAlertas();
+    
     toast(editando ? 'Producto actualizado' : 'Producto creado');
   } catch (e) {
     error.textContent = e.message;
@@ -647,9 +648,26 @@ $('btn-cobrar').addEventListener('click', async () => {
 });
 
 // ---------- Alertas ----------
+let idsAlertasConocidas = null; //- test
+
 async function refrescarContadorAlertas() {
   try {
     const lista = await Api.get('/api/recordatorios');
+
+    //test audio
+    const idsActuales = new Set(lista.map((alerta) => alerta.id));
+
+    if (
+      idsAlertasConocidas !== null &&
+      [...idsActuales].some((id) => !idsAlertasConocidas.has(id))
+    ) {
+      reproducirSonidoAlerta();
+    }
+
+    idsAlertasConocidas = idsActuales;
+    //test audio
+
+
     const c = $('cont-alertas');
     c.textContent = String(lista.length);
     c.classList.toggle('oculto', lista.length === 0);
@@ -997,7 +1015,20 @@ if ('serviceWorker' in navigator) {
 }
 
 
+const sonidoAlerta = new Audio('/audio/alerta.mp3');
+sonidoAlerta.preload = 'auto';
 
+function reproducirSonidoAlerta() {
+  sonidoAlerta.currentTime = 0;
+  sonidoAlerta.play().catch((error) => {
+    console.error('No se pudo reproducir el sonido de alerta:', error);
+  });
+}
+setInterval(() => {
+  if (Api.sesion()) {
+    void refrescarContadorAlertas();
+  }
+}, 10000);
 
 // ---------- arranque ----------
 if (Api.sesion()) mostrarApp(); else mostrarAuth();
