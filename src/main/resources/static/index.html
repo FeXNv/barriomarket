@@ -123,8 +123,9 @@
           <p id="sin-por-agotar" class="sub oculto">Todo en orden, nada por agotarse.</p>
         </div>
         <div class="card panel panel-ancho">
-          <h3>Últimas actualizaciones</h3>
-          <p class="sub">Aquí verás los últimos cambios de stock. Próximamente.</p>
+          <h3>Últimas actualizaciones de stock</h3>
+          <ul id="lista-actualizaciones" class="mini"></ul>
+          <p id="sin-actualizaciones" class="sub oculto">Todavía no hay actualizaciones. ¡Usemos BarrioMarket!</p>
         </div>
       </div>
     </section>
@@ -213,7 +214,6 @@
         <button type="button" id="btn-excel" class="btn">Descargar Excel</button>
         <button type="button" id="btn-rep-hoy" class="btn">Hoy</button>
         <button type="button" id="btn-rep-ayer" class="btn">Ayer</button>
-        <button type="button" id="btn-ver-reporte" class="btn primario">Ver</button>
       </div>
       <p id="msg-reportes" class="error" role="alert"></p>
       <div class="tabla-scroll">

@@ -283,3 +283,5 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
   .alerta-acciones { justify-content: stretch; }
   .alerta-acciones .btn { flex: 1; }
 }
+
+.mini .sub { margin: 0; font-size: .85rem; text-align: right; }

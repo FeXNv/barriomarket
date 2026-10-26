@@ -177,16 +177,24 @@ async function cargarInicio() {
   $('saludo').textContent = saludo + (s && s.nombre ? ', ' + s.nombre : '') + '. Así va tu bodega hoy.';
   try {
     const hoy = hoyISO();
-    const [lista, ventas] = await Promise.all([
+    //lista de productos, ventas de hoy y últimos movimientos recientes (8) - 
+    // FUNCION DE MAPEO NO BORRAR - | CUIDADO!!!!
+    const [lista, ventas, movs] = await Promise.all([
       Api.get('/api/productos'),
       Api.get('/api/reportes/ventas?desde=' + hoy + '&hasta=' + hoy),
+      Api.get('/api/historial?limite=8'),
     ]);
     productos = lista;
     renderInicio(ventas);
+    renderActualizaciones(movs);
   } catch (e) {
     $('msg-inicio').textContent = e.message;
   }
 }
+
+
+
+
 
 function renderInicio(ventas) {
   const cuenta = { verde: 0, amarillo: 0, rojo: 0 };
@@ -215,6 +223,33 @@ function renderInicio(ventas) {
       el('span', { text: icono(p) + ' ' + p.nombre }),
       el('span', { class: 'badge ' + p.estado, text: cantidad(p.stock) + ' ' + p.unidadMedida }),
     ));
+  }
+}
+
+//constantes y funciones para el historial de movimientos, no BORRAR!!! , manejo de tiempos y renderizado de movimientos recientes
+// cuidao , al borrar no se mapean los datos de historial 
+const ICONO_MOV = { venta: '🛒', reposicion: '📥', ajuste: '✏️', merma: '📉' };
+const TEXTO_MOV = { venta: 'Venta', reposicion: 'Reposición', ajuste: 'Ajuste', merma: 'Merma' };
+
+function hace(fechaTexto) {
+  const seg = Math.max(0, Math.round((Date.now() - new Date(fechaTexto).getTime()) / 1000));
+  if (seg < 60) return 'hace un momento';
+  const min = Math.floor(seg / 60);
+  if (min < 60) return 'hace ' + min + ' min';
+  const h = Math.floor(min / 60);
+  if (h < 24) return 'hace ' + h + ' h';
+  const d = Math.floor(h / 24);
+  return 'hace ' + d + (d === 1 ? ' día' : ' días');
+}
+
+function renderActualizaciones(lista) {
+  const ul = $('lista-actualizaciones');
+  ul.replaceChildren();
+  $('sin-actualizaciones').classList.toggle('oculto', lista.length > 0);
+  for (const m of lista) {
+    ul.append(el('li', {},
+      el('span', { text: (ICONO_MOV[m.tipoMovimiento] || '•') + ' ' + m.producto + ' · ' + (TEXTO_MOV[m.tipoMovimiento] || m.tipoMovimiento) }),
+      el('span', { class: 'sub', text: cantidad(m.stockAnterior) + ' → ' + cantidad(m.stockNuevo) + ' · ' + hace(m.fechaHora) })));
   }
 }
 
@@ -741,29 +776,29 @@ async function cargarReportes() {
   if (!$('rep-hasta').value) {
     const hoy = new Date();
     $('rep-hasta').value = hoyISO();
-    //ACTUALIACIÓN - Se agregan botones de hoy y ayer, para má comodidad
-    function seleccionarDiaReporte(fecha) {
-      const dia = fecha.toLocaleDateString('en-CA');
-      $('rep-desde').value = dia;
-      $('rep-hasta').value = dia;
-      verReporte();
-    }
-
-    $('btn-rep-hoy').addEventListener('click', () => {
-      seleccionarDiaReporte(new Date());
-    });
-
-    $('btn-rep-ayer').addEventListener('click', () => {
-      const ayer = new Date();
-      ayer.setDate(ayer.getDate() - 1);
-      seleccionarDiaReporte(ayer);
-    });
-
-
     $('rep-desde').value = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toLocaleDateString('en-CA');
   }
   await verReporte();
 }
+
+function seleccionarDiaReporte(fecha) {
+  const dia = fecha.toLocaleDateString('en-CA');
+  $('rep-desde').value = dia;
+  $('rep-hasta').value = dia;
+  verReporte();
+}
+//botones de selección rápida de día para reportes - 
+$('btn-rep-hoy').addEventListener('click', () => seleccionarDiaReporte(new Date()));
+$('btn-rep-ayer').addEventListener('click', () => {
+  const ayer = new Date();
+  ayer.setDate(ayer.getDate() - 1);
+  seleccionarDiaReporte(ayer);
+});
+
+
+
+
+
 
 async function verReporte() {
   mensaje('msg-reportes', '');
