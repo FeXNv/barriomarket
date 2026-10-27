@@ -55,6 +55,7 @@ public class ProductoService {
         validar(idUsuario, req);
         aplicar(p, req);
         Producto guardado = productos.save(p);
+        recordatorios.sincronizar(guardado);
         log.info("Producto actualizado id={} usuario={}", id, idUsuario);
         return ProductoResponse.de(guardado);
     }

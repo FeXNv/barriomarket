@@ -14,6 +14,9 @@ import java.util.Optional;
 
 public interface ProductoRepository extends JpaRepository<Producto, Integer> {
     List<Producto> findByIdUsuarioAndDeletedAtIsNullOrderByNombre(Integer idUsuario);
+    
+
+
     Optional<Producto> findByIdAndIdUsuarioAndDeletedAtIsNull(Integer id, Integer idUsuario);
     boolean existsByIdUsuarioAndNombreIgnoreCaseAndDeletedAtIsNull(Integer idUsuario, String nombre);
 
