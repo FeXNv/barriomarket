@@ -29,11 +29,12 @@ class ProductoServiceTest {
 
     @Mock ProductoRepository productos;
     @Mock CategoriaRepository categorias;
+    @Mock RecordatorioService recordatorios;
     private ProductoService service;
 
     @BeforeEach
     void preparar() {
-        service = new ProductoService(productos, categorias, new SemaforoService(), null);
+        service = new ProductoService(productos, categorias, new SemaforoService(), recordatorios);
     }
 
     private ProductoRequest req(String stock, String unidad) {
@@ -61,6 +62,7 @@ class ProductoServiceTest {
         ProductoResponse r = service.crear(USUARIO, req("0", "kg"));
 
         assertThat(r.estado()).isEqualTo("rojo");
+        verify(recordatorios).sincronizar(any(Producto.class));
     }
 
     @Test
@@ -72,6 +74,7 @@ class ProductoServiceTest {
 
         assertThat(r.estado()).isEqualTo("amarillo");
         verify(productos).save(org.mockito.ArgumentMatchers.argThat(p -> USUARIO.equals(p.getIdUsuario())));
+        verify(recordatorios).sincronizar(any(Producto.class));
     }
 
     @Test
